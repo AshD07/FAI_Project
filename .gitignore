@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# XFC hackathon starter kit (third-party course material, not part of the pilot)
+nafips_tutorial_files_v2/
+
+# Superseded draft report (see CS502_Project_Report.pdf)
+PROJECT_REPORT.md
