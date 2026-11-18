@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explainable AI Asteroid Pilot · Live Demo</title>
+<meta name="description" content="Live in-browser demo of a CS 502 project: an explainable AI pilot (Kalman tracking, rule engine, minimax, A*, CSP firing, genetic tuning) running the project's real Python code via Pyodide.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="web/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="kicker">CS 502 · Fundamentals of AI · South Asian University</div>
+    <h1>Explainable AI Asteroid Pilot <span class="live">LIVE</span></h1>
+  </div>
+  <nav class="links">
+    <a href="https://github.com/AshD07/FAI_Project" target="_blank" rel="noopener">Code on GitHub</a>
+    <a href="CS502_Project_Report.pdf" target="_blank" rel="noopener">Read the report</a>
+  </nav>
+</header>
+
+<main class="layout">
+  <section class="stage">
+    <div class="canvas-wrap">
+      <canvas id="arena" width="1000" height="800" aria-label="Simulation view: the AI-controlled ship avoiding and shooting asteroids"></canvas>
+      <div id="loading" class="overlay">
+        <div class="loader-card">
+          <div class="spinner" aria-hidden="true"></div>
+          <div id="loading-text">Starting Python in your browser…</div>
+          <div class="loader-sub">First load downloads the Python runtime, NumPy and SciPy (about 30 MB). It is cached after that.</div>
+          <div class="progress"><div id="progress-bar"></div></div>
+        </div>
+      </div>
+      <div id="gameover" class="overlay hidden">
+        <div class="loader-card">
+          <div id="go-title" class="go-title">Ship destroyed</div>
+          <div id="go-text" class="loader-sub"></div>
+          <div class="go-actions">
+            <button id="go-replay" type="button">Replay this seed</button>
+            <button id="go-next" type="button" class="primary">New seed</button>
+          </div>
+          <div id="go-auto" class="loader-sub"></div>
+        </div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="sw ship"></i>AI ship</span>
+      <span><i class="sw path"></i>A* path &amp; waypoint</span>
+      <span><i class="sw grid"></i>A* blocked cells</span>
+      <span><i class="sw pred"></i>Kalman prediction (2 s)</span>
+      <span><i class="sw radar"></i>Noisy radar returns</span>
+      <span><i class="sw aim"></i>CSP aim point</span>
+      <span><i class="sw hazard"></i>Imminent hazard</span>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <div class="controls">
+      <div class="row">
+        <button id="btn-play" type="button" class="primary" disabled>Pause</button>
+        <button id="btn-restart" type="button" disabled>Restart</button>
+        <button id="btn-seed" type="button" disabled>New seed</button>
+      </div>
+      <div class="row fields">
+        <label>Scenario
+          <select id="sel-mode">
+            <option value="solo" selected>Solo survival (endless waves)</option>
+            <option value="s1">Benchmark 1 · Target accuracy</option>
+            <option value="s2">Benchmark 2 · Hazard swarm</option>
+            <option value="s3">Benchmark 3 · Passive rival</option>
+            <option value="s4">Benchmark 4 · Adversarial duel</option>
+            <option value="s5">Benchmark 5 · High-speed debris</option>
+          </select>
+        </label>
+        <label>Pilot parameters
+          <select id="sel-params">
+            <option value="ga" selected>GA-tuned</option>
+            <option value="default">Default</option>
+          </select>
+        </label>
+      </div>
+      <div class="row fields">
+        <label>Seed <input id="inp-seed" type="number" min="0" max="99999" value="1"></label>
+        <label>Speed
+          <select id="sel-speed">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+            <option value="4">4×</option>
+          </select>
+        </label>
+      </div>
+      <div class="row toggles">
+        <label><input id="tg-grid" type="checkbox" checked> A* grid</label>
+        <label><input id="tg-pred" type="checkbox" checked> Kalman</label>
+        <label><input id="tg-radar" type="checkbox"> Radar</label>
+        <label><input id="tg-auto" type="checkbox" checked> Auto-restart</label>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div><span id="st-time">0.0 s</span><label>Time</label></div>
+      <div><span id="st-score">0</span><label>Score</label></div>
+      <div><span id="st-acc">–</span><label>Accuracy</label></div>
+      <div><span id="st-speed">0</span><label>Speed px/s</label></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">Stage 4</span> Rule engine (forward chaining)</div>
+      <div id="rule-badge" class="badge">–</div>
+      <p id="rule-why" class="why">Waiting for the first decision…</p>
+      <div class="facts">
+        <div><label>Time to impact</label><span id="f-tti">–</span></div>
+        <div><label>Closure rate</label><span id="f-closure">–</span></div>
+        <div><label>Nearest asteroid</label><span id="f-near">–</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">Stage 7</span> Tactics (minimax, alpha-beta)</div>
+      <div class="mm-line"><b id="mm-tactic">–</b> <span id="mm-u" class="muted"></span></div>
+      <p id="mm-why" class="why"></p>
+      <div id="mm-search" class="muted small"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">Stage 6</span> Firing (constraint satisfaction)</div>
+      <div class="chips" id="csp-chips"></div>
+      <p id="csp-why" class="why"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-h"><span class="tag">Act</span> Actuator commands</div>
+      <div class="act">
+        <label>Turn</label><div class="meter center"><div id="m-turn"></div></div><span id="v-turn">0°/s</span>
+        <label>Thrust</label><div class="meter"><div id="m-thrust"></div></div><span id="v-thrust">0.00</span>
+        <label>Fire</label><div id="v-fire" class="fire">hold</div><span></span>
+      </div>
+    </div>
+
+    <details class="card about">
+      <summary>How this demo works</summary>
+      <p>This page runs the project's actual Python code (<code>src/</code>) in your browser with <a href="https://pyodide.org" target="_blank" rel="noopener">Pyodide</a>. Each tick the radar adds noise, the Kalman tracker estimates every asteroid, the rule engine checks for danger, minimax picks a tactic, A* plans a path and the CSP decides whether a shot is safe. The panels show the explanation the pilot itself produces.</p>
+      <p>Team: Ashutosh Diwan, Tanishq Ajmeria, Vithul P Rajeev, Himanshu Kumar.</p>
+      <p class="muted small">Keys: Space pause · R restart · N new seed · G grid</p>
+    </details>
+  </aside>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="web/app.js"></script>
+</body>
+</html>
